@@ -1,0 +1,38 @@
+```{r setup, include=FALSE}
+options(repos = c(CRAN = "https://cran.rstudio.com/"))
+
+# List of required packages
+packages <- c("tidyverse", "lubridate", "caret", "randomForest", "knitr", "ggplot2", "readxl")
+
+# Install any missing packages
+to_install <- packages[!packages %in% installed.packages()]
+if(length(to_install)) install.packages(to_install)
+
+# Load all packages
+lapply(packages, library, character.only = TRUE)
+
+# Load the data
+data <- readxl::read_excel("/Users/gyansharma/Documents/MGT 599 Reyes Holdings Student Files/R_Analysis/All_Voilations_Analysis/All_Voilations_2023.xlsx", sheet = 1)
+head(data)
+
+# Summary of data to get an overview of violation frequencies
+summary(data)
+```
+
+```{r}
+# Count the occurrences of each type of violation
+violation_counts <- data %>%
+  summarise(across(everything(), ~ sum(. == 1, na.rm = TRUE))) %>%
+  pivot_longer(cols = everything(), names_to = "Violation_Type", values_to = "Count")
+
+# Plot the top 10 most frequent violations
+violation_counts %>%
+  arrange(desc(Count)) %>%
+  slice(1:10) %>%
+  ggplot(aes(x = reorder(Violation_Type, Count), y = Count)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "Top 10 Most Frequent Violations", x = "Violation Type", y = "Count")
+
+```
+

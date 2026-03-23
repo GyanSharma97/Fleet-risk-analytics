@@ -1,0 +1,108 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+---
+
+
+```{r setup, include=FALSE}
+options(repos = c(CRAN = "https://cran.rstudio.com/"))
+
+# List of required packages
+packages <- c("tidyverse", "lubridate", "caret", "randomForest", "knitr", "ggplot2", "readxl", "hms")
+
+# Install any missing packages
+to_install <- packages[!packages %in% installed.packages()]
+if(length(to_install)) install.packages(to_install)
+
+# Load all packages
+lapply(packages, library, character.only = TRUE)
+
+# Load required libraries
+library(tidyverse)  # For data manipulation and visualization
+library(lubridate)  # For working with dates and times
+
+# Simulate loading your data (replace this with the actual file path)
+data <- read.csv("/Users/gyansharma/Desktop/Certification/crash_data.csv")
+
+# Inspect the data
+head(data)  # View the first few rows of the dataset
+str(data)   # Check the structure of the dataset
+
+# Clean and transform the data
+crash_data <- data %>%
+  mutate(
+    `CRASH DATE` = mdy(`CRASH.DATE`),        # Convert crash date to Date format
+    `CRASH TIME` = hm(`CRASH.TIME`),         # Convert crash time to Time format
+    Hour = hour(`CRASH TIME`),               # Extract the hour of the crash
+    Weekday = wday(`CRASH DATE`, label = TRUE),  # Extract the day of the week
+    Month = month(`CRASH DATE`, label = TRUE),  # Extract the month
+    Year = year(`CRASH DATE`),  # Extract the year
+    BOROUGH = ifelse(is.na(BOROUGH), "UNKNOWN", BOROUGH) # Handle missing boroughs
+  )
+
+# Inspect the cleaned and transformed data
+head(crash_data)
+str(crash_data)
+
+# Aggregate crash data by hour
+hourly_crashes <- crash_data %>%
+  group_by(Hour) %>%
+  summarise(across(starts_with("NUMBER"), sum, na.rm = TRUE))
+
+# Visualize crashes by hour
+ggplot(hourly_crashes, aes(x = Hour)) +
+  geom_line(aes(y = NUMBER.OF.PERSONS.INJURED, color = "Injured Persons"), size = 1.2) +
+  geom_line(aes(y = NUMBER.OF.PERSONS.KILLED, color = "Killed Persons"), size = 1.2) +
+  geom_line(aes(y = NUMBER.OF.PEDESTRIANS.INJURED, color = "Injured Pedestrians"), size = 1.2) +
+  geom_line(aes(y = NUMBER.OF.PEDESTRIANS.KILLED, color = "Killed Pedestrians"), size = 1.2) +
+  geom_line(aes(y = NUMBER.OF.CYCLIST.INJURED, color = "Injured Cyclists"), size = 1.2) +
+  geom_line(aes(y = NUMBER.OF.CYCLIST.KILLED, color = "Killed Cyclists"), size = 1.2) +
+  geom_line(aes(y = NUMBER.OF.MOTORIST.INJURED, color = "Injured Motorists"), size = 1.2) +
+  geom_line(aes(y = NUMBER.OF.MOTORIST.KILLED, color = "Killed Motorists"), size = 1.2) +
+  theme_minimal() +
+  labs(title = "Injury and Fatality Trends by Hour of the Day", 
+       x = "Hour of the Day", y = "Count of Injuries/Fatalities") +
+  scale_color_manual(values = c("Injured Persons" = "steelblue", "Killed Persons" = "red", 
+                                "Injured Pedestrians" = "darkorange", "Killed Pedestrians" = "darkred", 
+                                "Injured Cyclists" = "seagreen", "Killed Cyclists" = "darkgreen", 
+                                "Injured Motorists" = "purple", "Killed Motorists" = "darkviolet"))
+
+# Aggregate crash data by weekday
+weekday_crashes <- crash_data %>%
+  group_by(Weekday) %>%
+  summarise(across(starts_with("NUMBER"), sum, na.rm = TRUE))
+
+# Visualize injuries and fatalities by weekday
+ggplot(weekday_crashes, aes(x = Weekday)) +
+  geom_bar(aes(y = NUMBER.OF.PERSONS.INJURED), stat = "identity", fill = "steelblue", alpha = 0.6) +
+  geom_bar(aes(y = NUMBER.OF.PERSONS.KILLED), stat = "identity", fill = "red", alpha = 0.6) +
+  theme_minimal() +
+  labs(title = "Injuries and Fatalities by Weekday", x = "Weekday", y = "Count of Injuries/Fatalities")
+
+# Aggregate crash data by month
+monthly_crashes <- crash_data %>%
+  group_by(Month) %>%
+  summarise(across(starts_with("NUMBER"), sum, na.rm = TRUE))
+
+# Visualize injuries and fatalities by month
+ggplot(monthly_crashes, aes(x = Month)) +
+  geom_bar(aes(y = NUMBER.OF.PERSONS.INJURED), stat = "identity", fill = "steelblue", alpha = 0.6) +
+  geom_bar(aes(y = NUMBER.OF.PERSONS.KILLED), stat = "identity", fill = "red", alpha = 0.6) +
+  theme_minimal() +
+  labs(title = "Injuries and Fatalities by Month", x = "Month", y = "Count of Injuries/Fatalities")
+
+# Aggregate crash data by year
+yearly_crashes <- crash_data %>%
+  group_by(Year) %>%
+  summarise(across(starts_with("NUMBER"), sum, na.rm = TRUE))
+
+# Visualize injury and fatality trends over years
+ggplot(yearly_crashes, aes(x = Year)) +
+  geom_line(aes(y = NUMBER.OF.PERSONS.INJURED, color = "Injured Persons"), size = 0.7) +
+  geom_line(aes(y = NUMBER.OF.PERSONS.KILLED, color = "Killed Persons"), size = 0.7) +
+  theme_minimal() +
+  labs(title = "Injury and Fatality Trends by Year", x = "Year", y = "Count of Injuries/Fatalities") +
+  scale_color_manual(values = c("Injured Persons" = "steelblue", "Killed Persons" = "red"))
+
+```

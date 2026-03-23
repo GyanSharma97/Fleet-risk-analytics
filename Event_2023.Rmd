@@ -1,0 +1,133 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+---
+```{r setup, include=FALSE}
+options(repos = c(CRAN = "https://cran.rstudio.com/"))
+
+# List of required packages
+packages <- c("tidyverse", "lubridate", "caret", "randomForest", "knitr", "ggplot2", "readxl")
+
+# Install any missing packages
+to_install <- packages[!packages %in% installed.packages()]
+if(length(to_install)) install.packages(to_install)
+
+# Load all packages
+lapply(packages, library, character.only = TRUE)
+
+# Load the data
+data <- readxl::read_excel("/Users/gyansharma/Documents/MGT 599 Reyes Holdings Student Files/2023_Event.xlsx", sheet = 1)
+head(data)
+```
+
+```{r data-preprocessing}
+data <- data %>%
+    mutate(record_date_utc = as_date(record_date_utc),
+           year = year(record_date_utc),
+           month = month(record_date_utc),
+           day = day(record_date_utc),
+           hour = hour(record_date_utc))
+
+# Display data structure
+str(data)
+```
+```{r descriptive-analysis}
+# Trigger event frequency
+trigger_summary <- data %>%
+    summarise(across(contains("trigger"), sum)) %>%
+    pivot_longer(cols = everything(), names_to = "event_type", values_to = "count")
+
+ggplot(trigger_summary, aes(x = reorder(event_type, count), y = count)) +
+    geom_bar(stat = "identity") +
+    coord_flip() +
+    labs(title = "Frequency of Each Trigger Event", x = "Event Type", y = "Count")
+
+# Risk by time of day (hourly analysis)
+time_risk <- data %>%
+    group_by(hour) %>%
+    summarise(total_risk = sum(event_score))
+
+# Plot with data labels
+ggplot(time_risk, aes(x = hour, y = total_risk)) +
+    geom_line(color = "blue", size = 1) +
+    geom_point(color = "red", size = 2) +
+    geom_text(aes(label = total_risk), vjust = -0.5, color = "darkblue") +
+    labs(title = "Risk by Hour", x = "Hour of Day", y = "Total Risk Score") +
+    theme_minimal()
+
+# Risk by day of the week
+day_risk <- data %>%
+    mutate(day_of_week = wday(record_date_utc, label = TRUE)) %>%
+    group_by(day_of_week) %>%
+    summarise(total_risk = sum(event_score))
+
+# Plot with data labels
+ggplot(day_risk, aes(x = day_of_week, y = total_risk)) +
+    geom_col(fill = "skyblue", color = "darkblue") +
+    geom_text(aes(label = total_risk), vjust = -0.5, color = "darkblue") +
+    labs(title = "Risk by Day of the Week", x = "Day of the Week", y = "Total Risk Score") +
+    theme_minimal()
+```
+
+```{r predictive-modeling}
+set.seed(123)
+# Create training and test sets
+trainIndex <- createDataPartition(data$event_score, p = .7, list = FALSE)
+train_data <- data[trainIndex, ]
+test_data <- data[-trainIndex, ]
+
+# Train random forest model
+model <- randomForest(event_score ~ ., data = train_data, importance = TRUE, ntree = 500)
+
+# Generate predictions on the test set
+predictions <- predict(model, test_data)
+
+# Convert event_score in test_data and predictions to factors with the same levels for confusion matrix
+test_data$event_score <- factor(test_data$event_score)
+predictions <- factor(predictions, levels = levels(test_data$event_score))
+
+# Evaluate model performance with confusion matrix
+confusionMatrix(predictions, test_data$event_score)
+
+# Generate predictions
+predictions <- predict(model, test_data)
+
+# Convert importance matrix to a data frame
+importance_df <- as.data.frame(importance(model))
+
+# Print the column names to identify the actual importance measure column
+print(colnames(importance_df))
+
+# Arrange by '%IncMSE' or 'IncNodePurity' to get the top 10 important variables
+importance_df <- importance_df %>%
+    rownames_to_column(var = "variable") %>%
+    arrange(desc(`%IncMSE`)) %>%  # Using `%IncMSE` for ranking
+    head(10)
+
+# Display the table
+kable(importance_df)
+
+```
+
+```{r top-variables-plot}
+ggplot(importance_df, aes(x = reorder(variable, `%IncMSE`), y = `%IncMSE`)) +
+    geom_bar(stat = "identity", fill = "steelblue") +
+    geom_text(aes(label = round(`%IncMSE`, 1)),  # Display labels with 1 decimal place
+              hjust = -0.2,                      # Position labels slightly outside the bar
+              size = 3) +                        # Adjust text size as needed
+    coord_flip() +
+    labs(title = "Top 10 Important Variables for Predicting Event Score",
+         x = "Variable", y = "Importance (% IncMSE)") +
+    theme_minimal() +                            # Use a clean theme
+    theme(plot.title = element_text(hjust = 0.5)) # Center-align the title
+```
+
+```{r prescriptive-analysis}
+cat("### Recommendations for Safety Initiatives:")
+cat("1. Implement targeted coaching for drivers on the top 3 high-risk behaviors identified.")
+cat("2. Increase monitoring and prevention efforts during peak risk hours as identified in the analysis.")
+cat("3. Review operational practices on days with higher risk and consider policy changes.")
+cat("4. Prioritize maintenance and vehicle checks on trucks showing higher scores for specific triggers.")
+cat("5. Use the data to monetize by offering custom reports to insurers or fleet partners.")
+```
